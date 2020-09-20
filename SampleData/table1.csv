@@ -1,0 +1,11 @@
+ProductID,ProductName,Colour,UnitPrice,Quantity,Fragile,Gift
+1001,GelPen,Blue,10,2,0,0
+1001,GelPen,Black,10,1,0,0
+1001,GelPen,Red,10,1,0,0
+1002,InkPen,Blue,50,1,0,1
+1003,InkBottle,Blue,35,1,1,1
+1004,Pencil,Grey,3,5,0,0
+1005,Eraser,White,2,2,0,0
+1006,Sharpner,Orange,3,1,0,0
+1006,Sharpner,Steel,5,1,0,0
+1007,GeometryBox,Green,40,0,0
