@@ -1,8 +1,8 @@
+#!/usr/bin/env python
 
 from pyspark.sql import SparkSession
 from pyspark.sql import Row
 from pyspark.sql import DataFrame
-
 
 
 def spot_variance(expected_dataframe, available_dataframe, primary_key):
@@ -76,7 +76,7 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
     non_primary_attributes = [ col.lower() for col in expected_dataframe.columns if col.lower() not in primary_attributes ]
     
     ## check all columns exist
-	## all columns on expected_dataframe, must be present in available_dataframe
+    ## all columns on expected_dataframe, must be present in available_dataframe
     missing_attributes = set((*primary_attributes, *non_primary_attributes)).difference(
                                  { c.lower() for c in available_dataframe.columns }
                              )
@@ -84,11 +84,9 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
         raise Exception("Few attributes are missing in second data frame : {}".format(missing_attributes))
     ##
     
-    
     ## repartition both data frames on primary keys
     expected_dataframe = _repartition_df_with_keys(expected_dataframe, primary_attributes)
     available_dataframe = _repartition_df_with_keys(available_dataframe, primary_attributes)
-    
     
     ## cache the data frames, if it is not cached before
     uncache_list = []  # to clear only those data frames that were cached by this function
@@ -118,7 +116,6 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
                                   )
     ## spot & report missing primary key || END
     
-    
     ## spot & report duplicated primary key || BEGIN
     df_duplicated_primary_attributes = expected_dataframe.select(*primary_attributes)\
                                            .join(
@@ -132,43 +129,48 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
                                      )
     ## spot & report duplicated primary key || END
     
-    
     ## spot & report mismatching attributes || BEGIN
     df_mismatch = expected_dataframe.select(*primary_attributes, *non_primary_attributes)\
                       .subtract(
                           available_dataframe.select(*primary_attributes, *non_primary_attributes)
                       ).select(*primary_attributes)
     
-    ##
+    # create temporary views
     expected_dataframe.createOrReplaceTempView("effulge_expected_view")
     available_dataframe.createOrReplaceTempView("effulge_available_view")
     
     # retains same column names for primary attributes
     # but renames non primary attributes to have "e_" prefix
     df_expected_with_renamed_columns = SparkSession.getActiveSession().sql(
-        "select " +\
-            ", ".join(
-                    [c for c in primary_attributes]
-                ) +\
-            ", "  +\
-            ", ".join(
-                    ["{0} as e_{0}".format(c) for c in non_primary_attributes]
-                ) +\
-            " from effulge_expected_view"
+        """
+        select
+            -- primary columns
+            {}, 
+            -- non primary columns with "e_" prefix
+            {} 
+        from {}
+        """.format(
+               ", ".join( primary_attributes ),
+               ", ".join( [ "{0} as e_{0}".format(c) for c in non_primary_attributes ] ),
+               "effulge_expected_view"
+        )
     )
     
     # retains same column names for primary attributes
     # but renames non primary attributes to have "a_" prefix
     df_available_with_renamed_columns = SparkSession.getActiveSession().sql(
-        "select " +\
-            ", ".join(
-                    [c for c in primary_attributes]
-                ) +\
-            ", "  +\
-            ", ".join(
-                    ["{0} as a_{0}".format(c) for c in non_primary_attributes]
-                ) +\
-            " from effulge_available_view"
+        """
+        select
+            -- primary columns
+            {}, 
+            -- non primary columns with "a_" prefix
+            {} 
+        from {}
+        """.format(
+               ", ".join( primary_attributes ),
+               ", ".join( [ "{0} as a_{0}".format(c) for c in non_primary_attributes ] ),
+               "effulge_available_view"
+            )
     )
     
     df_mismatch_join = df_mismatch.join(
@@ -188,7 +190,9 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
     ## spot & report mismatching attributes || END
     
     # merge all variances
-    effulge_variance_dataframe = rdd_variance.union(rdd_missing_primary_key).union(rdd_duplicated_primary_key).toDF()
+    effulge_variance_dataframe = rdd_variance.union(rdd_missing_primary_key)\
+                                             .union(rdd_duplicated_primary_key)\
+                                             .toDF().repartition(*primary_attributes)
     
     ## persist output dataframe
     effulge_variance_dataframe.persist()
@@ -204,6 +208,7 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
     
     ## Return the output dataframe
     return effulge_variance_dataframe
+
 
 #
 def _spot_corrupted_attributes(row_object, primary_column_list, suspect_column_list, left_prefix, right_prefix):
@@ -278,6 +283,7 @@ def _repartition_df_with_keys(dataframe_object, partition_columns_tuple):
     #
     return dataframe_object
 
+
 #
 def _check_instance_type(given_object, acceptable_classes, param_name):
     """
@@ -297,10 +303,10 @@ def _check_instance_type(given_object, acceptable_classes, param_name):
 
 if __name__ == '__main__' :
     spark = SparkSession.builder.appName("Effulge").getOrCreate()
-    
+    #
     df_expected = spark.read.option("header", True ).csv("/app/effulge/SampleData/table1.csv")
     df_available = spark.read.option("header", True ).csv("/app/effulge/SampleData/table2.csv")
     candidate_key = ("ProductID", "Colour")
-    
+    #
     result = spot_variance(df_expected, df_available, candidate_key)
     result.show(truncate=False)
