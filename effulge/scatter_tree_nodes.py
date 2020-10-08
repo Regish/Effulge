@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 
 """
-Module for
-    1. Translating complex nested datatype
-       into a Tree like structure (termed as Scatter Tree)
-    2. Comparing two scatter trees for equality
+Module for representing
+  - complex nested list or tuple or dictionary
+  - as a Tree based data structure (termed as Scatter Tree)
 
-Tree based comparison allows
+Tree reprentation allows
   - equality checks on contents
   - even though the contents have different order
 """
@@ -24,7 +23,7 @@ class NodeType(Enum):
 
 class Marker(Enum):
     """
-    Ennumeration Class to Flag a Scatter Tree Node
+    Enumeration Class to Flag a Scatter Tree Node
       - GREEN, when a node is not matched yet
       - RED, when a node has been matched
     """
@@ -63,7 +62,10 @@ class Node:
         """
         Setter method for attribute 'marker'
         """
-        self.marker = Marker.RED
+        if self.marker is Marker.GREEN:
+            self.marker = Marker.RED
+        else:
+            raise ValueError("Flag is already marked. Cannot mark again.")
 
 class PrimitiveNode(Node):
     """
@@ -129,6 +131,24 @@ class CollectionNode(Node):
             raise OverflowError("cannot add members more than the initialized size")
         self.members.append(node)
         return True
+
+class ListNode(CollectionNode):
+    """
+    Class to denote a Node representing a List or Tuple.
+
+    Structure:
+        +------------+
+        |    type    |
+        |------------|
+        |   marker   |
+        |------------|
+        |    size    |
+        |------------|
+        |  members   |
+        +------------+
+    """
+    def __init__(self, size):
+        super().__init__(NodeType.LIST_OR_TUPLE, size)
     def filter_collection_members(self, member_type, member_length):
         """
         Method to filter selective 'members'
@@ -154,24 +174,6 @@ class CollectionNode(Node):
                 ]
         return match
 
-class ListNode(CollectionNode):
-    """
-    Class to denote a Node representing a List or Tuple.
-
-    Structure:
-        +------------+
-        |    type    |
-        |------------|
-        |   marker   |
-        |------------|
-        |    size    |
-        |------------|
-        |  members   |
-        +------------+
-    """
-    def __init__(self, size):
-        super().__init__(NodeType.LIST_OR_TUPLE, size)
-
 class DictNode(CollectionNode):
     """
     Class to denote a Node representing a Dictionary.
@@ -189,6 +191,52 @@ class DictNode(CollectionNode):
     """
     def __init__(self, size):
         super().__init__(NodeType.DICTIONARY, size)
+    def filter_similar_members(self, sample_member):
+        """
+        Method to filter selective 'members'
+          which are similar to a given key value node
+        """
+        #
+        key_type = sample_member.get_key_reference().get_type()
+        if key_type is NodeType.PRIMITIVE:
+            is_key_collection = False
+            key_filter = sample_member.get_key_reference().get_value()
+        else:
+            is_key_collection = True
+            key_filter = sample_member.get_key_reference().get_size()
+        #
+        value_type = sample_member.get_value_reference().get_type()
+        if value_type is NodeType.PRIMITIVE:
+            is_value_collection = False
+            value_filter = sample_member.get_value_reference().get_value()
+        else:
+            is_value_collection = True
+            value_filter = sample_member.get_value_reference().get_size()
+        #
+        # filter matching for K node type and V node type
+        both_types_match = [ m for m in self.get_members()
+                                 if m.get_key_reference().get_type() == key_type
+                                   and m.get_value_reference().get_type() == value_type
+                           ]
+        # filter matching for K node size or K node value
+        only_key_match = [ m for m in both_types_match
+                               if (  is_key_collection
+                                     and m.get_key_reference().get_size() == key_filter
+                                  )
+                                  or (  (not is_key_collection)
+                                        and m.get_key_reference().get_value() == key_filter
+                                     )
+                         ]
+        # filter matching for V node size or V node value
+        match = [ m for m in only_key_match
+                      if (  is_value_collection
+                            and m.get_value_reference().get_size() == value_filter
+                         )
+                         or (  (not is_value_collection)
+                               and m.get_value_reference().get_value() == value_filter
+                            )
+                ]
+        return match
 
 class KeyValNode(Node):
     """
@@ -231,69 +279,3 @@ class KeyValNode(Node):
         """
         self.value_reference = node
         return True
-
-def _scatter(iterable_object, node_count=0):
-    """
-    For internal use only.
-    Users are discouraged to invoke this function directly.
-
-    Function to create a scatter tree from an object.
-    It recursively parses the given 'iterable_object'
-      - creates a node for each element
-      - builds the scatter tree
-      - it also tracks the total number of nodes.
-
-    Parameters:
-        Name:  iterable_object
-        Tyoe:    Any
-        Name:  node_count    (OPTIONAL)
-        Type:    int         (default is 0)
-
-    Return Type:
-       tuple(object_reference, int)
-           'object_reference' points to Root Node of the Scatter Tree
-           'int' value denotes the total node count in the Scatter Tree
-    """
-    if isinstance(iterable_object, (list, tuple)):
-        # scatter list/tuple into many nodes
-        list_node = ListNode(len(iterable_object))
-        node_count += 1
-        for m_obj in iterable_object:
-            m_node, node_count = _scatter(m_obj, node_count)
-            list_node.add_member(m_node)
-        root_node = list_node
-    elif isinstance(iterable_object, dict):
-        # scatter dict into many nodes
-        dict_node = DictNode(len(iterable_object))
-        node_count += 1
-        for (k_obj,v_obj) in iterable_object.items():
-            k_node, node_count = _scatter(k_obj, node_count)
-            v_node, node_count = _scatter(v_obj, node_count)
-            kv_node = KeyValNode()
-            node_count += 1
-            kv_node.set_key_reference(k_node)
-            kv_node.set_value_reference(v_node)
-            dict_node.add_member(kv_node)
-        root_node = dict_node
-    else:
-        # retain as single node
-        primitive_node = PrimitiveNode(iterable_object)
-        node_count += 1
-        root_node = primitive_node
-    return (root_node, node_count)
-
-def scatter(iterable_object):
-    """
-    Function to create a scatter tree from an iterable object.
-
-    Parameters:
-        Name:  iterable_object
-        Tyoe:    Any
-
-    Return Type:
-       tuple(object_reference, int)
-           'object_reference' points to Root Node of the Scatter Tree
-           'int' value denotes the total node count in the Scatter Tree
-    """
-    scatter_tree, total_node_count = _scatter(iterable_object)
-    return (scatter_tree, total_node_count)
