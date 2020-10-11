@@ -13,9 +13,12 @@ Analogy:
 """
 
 
-from pyspark.sql import SparkSession    # pylint: disable=import-error
-from pyspark.sql import Row             # pylint: disable=import-error
-from pyspark.sql import DataFrame       # pylint: disable=import-error
+from pyspark.sql import SparkSession                        # pylint: disable=import-error
+from pyspark.sql import Row                                 # pylint: disable=import-error
+from pyspark.sql import DataFrame                           # pylint: disable=import-error
+from pyspark.sql.functions import col                       # pylint: disable=import-error
+from pyspark.sql.functions import round as pyspark_round    # pylint: disable=import-error
+from scatter_tree_compare import compare_two_collections
 
 
 def spot_variance(expected_dataframe, available_dataframe, primary_key):
@@ -38,12 +41,12 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
         pyspark.sql.dataframe.DataFrame
         Format:
 
-     -----------------------------------------------------------------------------------------
+    +------------------------+---------+------------------------+-----------------------------+
     |  <<primary_column_1>>  |  . . .  |  <<primary_column_N>>  |  EFFULGE_VARIANCE_PROVOKER  |
-     -----------------------------------------------------------------------------------------
+    +------------------------+---------+------------------------+-----------------------------+
     |                        |         |                        |                             |
     |                        |         |                        |                             |
-     -----------------------------------------------------------------------------------------
+    +------------------------+---------+------------------------+-----------------------------+
 
         EFFULGE_VARIANCE_PROVOKER
             Type:    List of Strings
@@ -167,6 +170,58 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
 
 
 #
+def summarize_variance(variance_df):
+    """
+    Function to summarize the variance dataframe.
+    It will provide count and percentage information for each variance attribute group.
+
+    Parameters:
+        Name: variance_df
+        Type:    pyspark.sql.dataframe.DataFrame
+
+    Return Type:
+        pyspark.sql.dataframe.DataFrame
+        Format:
+
+    +-----------------------------+--------------------------+-------------------------------+
+    |  EFFULGE_VARIANCE_PROVOKER  |  EFFULGE_VARIANCE_COUNT  |  EFFULGE_VARIANCE_PERCENTAGE  |
+    +-----------------------------+--------------------------+-------------------------------+
+    |                             |                          |                               |
+    |                             |                          |                               |
+    +-----------------------------+--------------------------+-------------------------------+
+
+    Throws Exception:
+        - If the input dataframe does not contain 'EFFULGE_VARIANCE_PROVOKER' column
+    """
+    all_columns = [ col_name.upper() for col_name in variance_df.columns ]
+    if "EFFULGE_VARIANCE_PROVOKER" not in all_columns:
+        raise Exception("Input Dataframe does not have column 'EFFULGE_VARIANCE_PROVOKER'")
+    total_variance_count = variance_df.count()
+    # create summary dataframe
+    summary_df = variance_df.groupBy(
+                                "EFFULGE_VARIANCE_PROVOKER"
+                            ).count()\
+                            .withColumnRenamed(
+                                "count",
+                                "EFFULGE_VARIANCE_COUNT"
+                            ).withColumn(
+                                "EFFULGE_VARIANCE_PERCENTAGE",
+                                pyspark_round(
+                                    col("EFFULGE_VARIANCE_COUNT") * 100 / total_variance_count,
+                                    2
+                                )
+                            ).orderBy(
+                                "EFFULGE_VARIANCE_COUNT",
+                                ascending=False
+                            )
+    # persist summary dataframe
+    summary_df.persist()
+    summary_df.count()
+    # return summary dataframe
+    return summary_df
+
+
+#
 def _spot_corrupted_attributes(row_object, primary_column_list,
                                suspect_column_list, left_prefix, right_prefix):
     """
@@ -198,11 +253,35 @@ def _spot_corrupted_attributes(row_object, primary_column_list,
         pyspark.sql.types.Row
     """
     varying_attributes = { c for c in suspect_column_list
-                                 if row_object[left_prefix + c] != row_object[right_prefix + c]
+                                 if not _are_equal(
+                                            row_object[left_prefix + c],
+                                            row_object[right_prefix + c]
+                                        )
                          }
     output_dict = { p:row_object[p] for p in primary_column_list }
     output_dict['EFFULGE_VARIANCE_PROVOKER'] = sorted(varying_attributes)
     return Row(**output_dict)
+
+
+#
+def _are_equal(var_1, var_2):
+    """
+    Function to compare two variables for equality.
+
+    Parameters:
+        Name: var_1
+        Type:    Any
+        Name: var_2
+        Type:    Any
+
+    Return Type:
+        Boolean
+    """
+    if isinstance(var_1, (tuple, list, dict)):
+        is_equal = compare_two_collections(var_1, var_2)
+    else:
+        is_equal = var_1 == var_2
+    return is_equal
 
 
 #
