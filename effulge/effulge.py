@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """
 Data Validation Utility on PySpark.
@@ -16,6 +16,10 @@ Analogy:
 from pyspark.sql import SparkSession                        # pylint: disable=import-error
 from pyspark.sql import Row                                 # pylint: disable=import-error
 from pyspark.sql import DataFrame                           # pylint: disable=import-error
+from pyspark.sql.types import StructType                    # pylint: disable=import-error
+from pyspark.sql.types import StructField                   # pylint: disable=import-error
+from pyspark.sql.types import ArrayType                     # pylint: disable=import-error
+from pyspark.sql.types import StringType                    # pylint: disable=import-error
 from pyspark.sql.functions import col                       # pylint: disable=import-error
 from pyspark.sql.functions import round as pyspark_round    # pylint: disable=import-error
 from scatter_tree_compare import compare_two_collections
@@ -372,19 +376,38 @@ def _spot_missing_primary_key(reference_df, received_df, prime_columns):
     Return Type:
         pyspark.sql.dataframe.DataFrame
     """
-    df_missing_primary_attributes = reference_df.select(*prime_columns)\
-                                        .subtract(
-                                            received_df.select(*prime_columns)
-                                        )
-    df_missing_primary_key = df_missing_primary_attributes\
-                                 .rdd\
-                                 .map(
-                                     lambda r:
-                                         Row(
-                                             **r.asDict(),
-                                             EFFULGE_VARIANCE_PROVOKER=["MISSING_PRIMARY_KEY"]
-                                         )
-                                 ).toDF()
+    try:
+        df_missing_primary_attributes = reference_df.select(*prime_columns)\
+                                            .subtract(
+                                                received_df.select(*prime_columns)
+                                            )
+        df_missing_primary_key = df_missing_primary_attributes\
+                                     .rdd\
+                                     .map(
+                                         lambda r:
+                                             Row(
+                                                 **r.asDict(),
+                                                 EFFULGE_VARIANCE_PROVOKER=["MISSING_PRIMARY_KEY"]
+                                             )
+                                     ).toDF()
+    except ValueError as exp:
+        if str(exp) == "RDD is empty":
+            # create empty result set
+            _schema_field_list = [ f for f in reference_df.schema.fields
+                                         if f.name.lower() in prime_columns
+                                 ]
+            _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER",
+                                                   ArrayType(StringType(), True),
+                                                   True
+                                                  ) )
+            _schema = StructType( _schema_field_list )
+            df_missing_primary_key = SparkSession.getActiveSession().createDataFrame(
+                SparkSession.getActiveSession().sparkContext.emptyRDD(),
+                _schema
+            )
+        else:
+            # raise the same exception, when ValueError message is different
+            raise exp
     return df_missing_primary_key
 
 
@@ -413,15 +436,36 @@ def _spot_duplicated_primary_key(reference_df, received_df, prime_columns):
                                                , "inner"
                                            ).groupBy(*prime_columns).count()\
                                            .where("count > 1").select(*prime_columns)
-    df_duplicated_primary_key = df_duplicated_primary_attributes\
-                                    .rdd\
-                                    .map(
-                                        lambda r:
-                                            Row(
-                                                **r.asDict(),
-                                                EFFULGE_VARIANCE_PROVOKER=["DUPLICATE_PRIMARY_KEY"]
-                                            )
-                                    ).toDF()
+    try:
+        df_duplicated_primary_key = df_duplicated_primary_attributes\
+                                        .rdd\
+                                        .map(
+                                            lambda r:
+                                                Row(
+                                                    **r.asDict(),
+                                                    EFFULGE_VARIANCE_PROVOKER=[
+                                                        "DUPLICATE_PRIMARY_KEY"
+                                                    ]
+                                                )
+                                        ).toDF()
+    except ValueError as exp:
+        if str(exp) == "RDD is empty":
+            # create empty result set
+            _schema_field_list = [ f for f in reference_df.schema.fields
+                                       if f.name.lower() in prime_columns
+                                 ]
+            _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER",
+                                                   ArrayType(StringType(), True),
+                                                   True
+                                                  ) )
+            _schema = StructType( _schema_field_list )
+            df_duplicated_primary_key = SparkSession.getActiveSession().createDataFrame(
+                SparkSession.getActiveSession().sparkContext.emptyRDD(),
+                _schema
+            )
+        else:
+            # raise the same exception, when ValueError message is different
+            raise exp
     return df_duplicated_primary_key
 
 
@@ -502,13 +546,32 @@ def _spot_mismatch_variance(reference_view_name, received_view_name,
                                  )
 
     # for each mismatch record, compare and identify variance columns
-    df_variance = df_mismatch_join\
-                      .rdd\
-                      .map(
-                          lambda r:
-                              _spot_corrupted_attributes(r, prime_columns, non_prime_columns,
-                                                         "e_", "a_")
-                      ).toDF()
+    try:
+        df_variance = df_mismatch_join\
+                          .rdd\
+                          .map(
+                              lambda r:
+                                  _spot_corrupted_attributes(r, prime_columns, non_prime_columns,
+                                                             "e_", "a_")
+                          ).toDF()
+    except ValueError as exp:
+        if str(exp) == "RDD is empty":
+            # create empty result set
+            _schema_field_list = [ f for f in df_expected_with_renamed_columns.schema.fields
+                                         if f.name.lower() in prime_columns
+                                 ]
+            _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER",
+                                                   ArrayType(StringType(), True),
+                                                   True
+                                                  ) )
+            _schema = StructType( _schema_field_list )
+            df_variance = SparkSession.getActiveSession().createDataFrame(
+                SparkSession().sparkContext.emptyRDD(),
+                _schema
+            )
+        else:
+            # raise the same exception, when ValueError message is different
+            raise exp
     return df_variance
 
 

@@ -1,6 +1,7 @@
 
 from pyspark.sql import SparkSession
 from effulge.effulge import spot_variance
+from effulge.effulge import summarize_variance
 
 def simple_run():
     spark = SparkSession.builder.appName("Effulge").config("spark.sql.shuffle.partitions", 5).getOrCreate()
@@ -11,6 +12,9 @@ def simple_run():
     #
     result = spot_variance(df_expected, df_available, candidate_key)
     result.show(truncate=False)
+    #
+    result_summary = summarize_variance(result)
+    result_summary.show(truncate=False)
 
 def test_simple():
     simple_run()
