@@ -566,7 +566,7 @@ def _spot_mismatch_variance(reference_view_name, received_view_name,
                                                   ) )
             _schema = StructType( _schema_field_list )
             df_variance = SparkSession.getActiveSession().createDataFrame(
-                SparkSession().sparkContext.emptyRDD(),
+                SparkSession.getActiveSession().sparkContext.emptyRDD(),
                 _schema
             )
         else:
