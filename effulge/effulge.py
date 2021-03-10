@@ -142,21 +142,33 @@ def spot_variance(expected_dataframe, available_dataframe, primary_key):
                                         primary_attributes
                                     )
 
-    # create temporary views
     temp_view_list = [] # to clear only the temp views that were created by this function
-    expected_dataframe.createOrReplaceTempView("effulge_expected_view")
-    temp_view_list.append("effulge_expected_view")
-    available_dataframe.createOrReplaceTempView("effulge_available_view")
-    temp_view_list.append("effulge_available_view")
 
-    # spot & report mismatching attributes
-    df_variance = _spot_mismatch_variance(
-                          "effulge_expected_view",
-                          "effulge_available_view",
-                          primary_attributes,
-                          non_primary_attributes
-                      )
+    # detect variance
+    if len(non_primary_attributes) > 0 :
+        # when few non primary columns exists, then explicitly identify their variances
+        #
+        # create temporary views
+        expected_dataframe.createOrReplaceTempView("effulge_expected_view")
+        temp_view_list.append("effulge_expected_view")
+        available_dataframe.createOrReplaceTempView("effulge_available_view")
+        temp_view_list.append("effulge_available_view")
 
+        # spot & report mismatching attributes
+        df_variance = _spot_mismatch_variance(
+                              "effulge_expected_view",
+                              "effulge_available_view",
+                              primary_attributes,
+                              non_primary_attributes
+                          )
+    else:
+        # when non primary columns do not exists,
+        # i.e, we only have primary columns,
+        # then the variances are caught implicity with MISSING_PRIMARY_KEY check
+        #
+        df_variance = _get_empty_result_df(expected_dataframe, primary_attributes)
+    #
+    #
     # merge all variances
     effulge_variance_dataframe = df_variance.union(df_missing_primary_key)\
                                              .union(df_duplicated_primary_key)\
@@ -393,18 +405,7 @@ def _spot_missing_primary_key(reference_df, received_df, prime_columns):
     except ValueError as exp:
         if str(exp) == "RDD is empty":
             # create empty result set
-            _schema_field_list = [ f for f in reference_df.schema.fields
-                                         if f.name.lower() in prime_columns
-                                 ]
-            _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER",
-                                                   ArrayType(StringType(), True),
-                                                   True
-                                                  ) )
-            _schema = StructType( _schema_field_list )
-            df_missing_primary_key = SparkSession.getActiveSession().createDataFrame(
-                SparkSession.getActiveSession().sparkContext.emptyRDD(),
-                _schema
-            )
+            df_missing_primary_key = _get_empty_result_df(reference_df, prime_columns)
         else:
             # raise the same exception, when ValueError message is different
             raise exp
@@ -451,18 +452,7 @@ def _spot_duplicated_primary_key(reference_df, received_df, prime_columns):
     except ValueError as exp:
         if str(exp) == "RDD is empty":
             # create empty result set
-            _schema_field_list = [ f for f in reference_df.schema.fields
-                                       if f.name.lower() in prime_columns
-                                 ]
-            _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER",
-                                                   ArrayType(StringType(), True),
-                                                   True
-                                                  ) )
-            _schema = StructType( _schema_field_list )
-            df_duplicated_primary_key = SparkSession.getActiveSession().createDataFrame(
-                SparkSession.getActiveSession().sparkContext.emptyRDD(),
-                _schema
-            )
+            df_duplicated_primary_key = _get_empty_result_df(reference_df, prime_columns)
         else:
             # raise the same exception, when ValueError message is different
             raise exp
@@ -557,18 +547,7 @@ def _spot_mismatch_variance(reference_view_name, received_view_name,
     except ValueError as exp:
         if str(exp) == "RDD is empty":
             # create empty result set
-            _schema_field_list = [ f for f in df_expected_with_renamed_columns.schema.fields
-                                         if f.name.lower() in prime_columns
-                                 ]
-            _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER",
-                                                   ArrayType(StringType(), True),
-                                                   True
-                                                  ) )
-            _schema = StructType( _schema_field_list )
-            df_variance = SparkSession.getActiveSession().createDataFrame(
-                SparkSession.getActiveSession().sparkContext.emptyRDD(),
-                _schema
-            )
+            df_variance = _get_empty_result_df(df_expected_with_renamed_columns, prime_columns)
         else:
             # raise the same exception, when ValueError message is different
             raise exp
@@ -596,3 +575,28 @@ def _clean_cache_and_view(cached_dataframe_list, temporary_view_list):
     # clear temporary view
     for view in temporary_view_list:
         SparkSession.getActiveSession().catalog.dropTempView(view)
+
+
+#
+def _get_empty_result_df(reference_df, primary_column_list):
+    """
+    Function to create an empty dataframe containing Primary Key columns and an additional EFFULGE_VARIANCE_PROVOKER column
+    Parameters:
+        Name : reference_df
+        Type :     pyspark.sql.dataframe.DataFrame object
+        Name : primary_column_list
+        Type :     list of String
+    Return Type:
+        pyspark.sql.dataframe.DataFrame object
+    """
+    _schema_field_list = [ f for f in reference_df.schema.fields if f.name.lower() in primary_column_list ]
+    _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER", ArrayType(StringType(), True), True) )
+    _schema = StructType( _schema_field_list )
+    #
+    empty_df = SparkSession.getActiveSession().createDataFrame(
+        SparkSession.getActiveSession().sparkContext.emptyRDD(),
+        _schema
+    )
+    #
+    return empty_df
+
