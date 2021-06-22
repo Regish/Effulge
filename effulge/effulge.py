@@ -16,8 +16,6 @@ Analogy:
 from pyspark.sql import SparkSession                        # pylint: disable=import-error
 from pyspark.sql import Row                                 # pylint: disable=import-error
 from pyspark.sql import DataFrame                           # pylint: disable=import-error
-from pyspark.sql.types import StructType                    # pylint: disable=import-error
-from pyspark.sql.types import StructField                   # pylint: disable=import-error
 from pyspark.sql.types import ArrayType                     # pylint: disable=import-error
 from pyspark.sql.types import StringType                    # pylint: disable=import-error
 from pyspark.sql.functions import col                       # pylint: disable=import-error
@@ -393,6 +391,8 @@ def _spot_missing_primary_key(reference_df, received_df, prime_columns):
                                             .subtract(
                                                 received_df.select(*prime_columns)
                                             )
+        _schema = df_missing_primary_attributes.schema
+        _schema.add("EFFULGE_VARIANCE_PROVOKER", ArrayType(StringType()) )
         df_missing_primary_key = df_missing_primary_attributes\
                                      .rdd\
                                      .map(
@@ -401,7 +401,7 @@ def _spot_missing_primary_key(reference_df, received_df, prime_columns):
                                                  **r.asDict(),
                                                  EFFULGE_VARIANCE_PROVOKER=["MISSING_PRIMARY_KEY"]
                                              )
-                                     ).toDF()
+                                     ).toDF( schema = _schema )
     except ValueError as exp:
         if str(exp) == "RDD is empty":
             # create empty result set
@@ -438,6 +438,8 @@ def _spot_duplicated_primary_key(reference_df, received_df, prime_columns):
                                            ).groupBy(*prime_columns).count()\
                                            .where("count > 1").select(*prime_columns)
     try:
+        _schema = df_duplicated_primary_attributes.schema
+        _schema.add("EFFULGE_VARIANCE_PROVOKER", ArrayType(StringType()) )
         df_duplicated_primary_key = df_duplicated_primary_attributes\
                                         .rdd\
                                         .map(
@@ -448,7 +450,7 @@ def _spot_duplicated_primary_key(reference_df, received_df, prime_columns):
                                                         "DUPLICATE_PRIMARY_KEY"
                                                     ]
                                                 )
-                                        ).toDF()
+                                        ).toDF( schema = _schema )
     except ValueError as exp:
         if str(exp) == "RDD is empty":
             # create empty result set
@@ -589,9 +591,8 @@ def _get_empty_result_df(reference_df, primary_column_list):
     Return Type:
         pyspark.sql.dataframe.DataFrame object
     """
-    _schema_field_list = [ f for f in reference_df.schema.fields if f.name.lower() in primary_column_list ]
-    _schema_field_list.append( StructField("EFFULGE_VARIANCE_PROVOKER", ArrayType(StringType(), True), True) )
-    _schema = StructType( _schema_field_list )
+    _schema = reference_df.select( *primary_column_list ).schema
+    _schema.add("EFFULGE_VARIANCE_PROVOKER", ArrayType(StringType()) )
     #
     empty_df = SparkSession.getActiveSession().createDataFrame(
         SparkSession.getActiveSession().sparkContext.emptyRDD(),
