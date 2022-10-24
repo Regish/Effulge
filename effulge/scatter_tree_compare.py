@@ -30,7 +30,7 @@ def _scatter(iterable_object, node_count=0):
 
     Parameters:
         Name:  iterable_object
-        Tyoe:    Any
+        Type:    Any
         Name:  node_count    (OPTIONAL)
         Type:    int         (default is 0)
 
