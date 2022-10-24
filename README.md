@@ -64,5 +64,15 @@ from Effulge import spot_variance
 
 output = spot_variance(df_expectation, df_reality, primary_key)
 output.show()
+
+
+# to generate variance report
+from report_generator import save_variance_report
+save_variance_report(
+    variance_df=output, source_df=df_expectation, target_df=df_reality,
+    super_key=primary_key, file_name="effulge_variance_report",
+    src_prefix='SRC', tgt_prefix='TGT'
+)
+
 ```
 -----
