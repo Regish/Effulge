@@ -20,7 +20,7 @@ from pyspark.sql.types import ArrayType                     # pylint: disable=im
 from pyspark.sql.types import StringType                    # pylint: disable=import-error
 from pyspark.sql.functions import col                       # pylint: disable=import-error
 from pyspark.sql.functions import round as pyspark_round    # pylint: disable=import-error
-from scatter_tree_compare import compare_two_collections
+from .scatter_tree_compare import compare_two_collections
 
 
 def spot_variance(expected_dataframe, available_dataframe, primary_key):
