@@ -10,7 +10,7 @@ Module to Generate Variance Report
 from pyspark.sql.functions import sum     # pylint: disable=import-error, redefined-builtin
 from pyspark.sql.functions import desc    # pylint: disable=import-error
 from pandas import ExcelWriter            # pylint: disable=import-error
-from effulge import summarize_variance    # pylint: disable=no-name-in-module
+from .effulge import summarize_variance    # pylint: disable=no-name-in-module
 
 
 def save_variance_report(variance_df, source_df, target_df, super_key, file_name, **kwargs):    # pylint: disable=too-many-locals

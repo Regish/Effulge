@@ -11,11 +11,11 @@ Tree based comparison allows
   - even though the contents have different order
 """
 
-from scatter_tree_nodes import NodeType
-from scatter_tree_nodes import ListNode
-from scatter_tree_nodes import DictNode
-from scatter_tree_nodes import KeyValNode
-from scatter_tree_nodes import PrimitiveNode
+from .scatter_tree_nodes import NodeType
+from .scatter_tree_nodes import ListNode
+from .scatter_tree_nodes import DictNode
+from .scatter_tree_nodes import KeyValNode
+from .scatter_tree_nodes import PrimitiveNode
 
 def _scatter(iterable_object, node_count=0):
     """

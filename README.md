@@ -56,7 +56,7 @@ Then, Effulge will produce an output dataframe with following contents -
 ## Usage:
 
 ```python
-from Effulge import spot_variance
+from effulge import spot_variance
 
 # Initialize SparkSession
 # Load data into dataframes, let's say they are called "df_expectation" and "df_reality"
@@ -67,7 +67,7 @@ output.show()
 
 
 # to generate variance report
-from report_generator import save_variance_report
+from effulge import save_variance_report
 save_variance_report(
     variance_df=output, source_df=df_expectation, target_df=df_reality,
     super_key=primary_key, file_name="effulge_variance_report",
